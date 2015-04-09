@@ -29,12 +29,12 @@ namespace NuGet.PackageManagement.VisualStudio
 
         public VSMSBuildNuGetProjectSystem(EnvDTEProject envDTEProject, INuGetProjectContext nuGetProjectContext)
         {
-            if(envDTEProject == null)
+            if (envDTEProject == null)
             {
                 throw new ArgumentNullException("envDTEProject");
             }
 
-            if(nuGetProjectContext == null)
+            if (nuGetProjectContext == null)
             {
                 throw new ArgumentNullException("nuGetProjectContext");
             }
@@ -61,7 +61,7 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             get
             {
-                if(_scriptExecutor == null)
+                if (_scriptExecutor == null)
                 {
                     _scriptExecutor = ServiceLocator.GetInstanceSafe<IScriptExecutor>();
                 }
@@ -155,7 +155,7 @@ namespace NuGet.PackageManagement.VisualStudio
         public void AddExistingFile(string path)
         {
             var fullPath = Path.Combine(ProjectFullPath, path);
-            if(!File.Exists(fullPath))
+            if (!File.Exists(fullPath))
             {
                 throw new ArgumentNullException(String.Format(Strings.PathToExistingFileNotPresent, fullPath, ProjectName));
             }
@@ -186,18 +186,20 @@ namespace NuGet.PackageManagement.VisualStudio
                 return;
             }
 
-            // Get the project items for the folder path
-            string folderPath = Path.GetDirectoryName(path);
-            string fullPath = FileSystemUtility.GetFullPath(ProjectFullPath, path);
-
-            ThreadHelper.Generic.Invoke(() =>
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                // Get the project items for the folder path
+                string folderPath = Path.GetDirectoryName(path);
+                string fullPath = FileSystemUtility.GetFullPath(ProjectFullPath, path);
+                
                 EnvDTEProjectItems container = EnvDTEProjectUtility.GetProjectItems(EnvDTEProject, folderPath, createIfNotExists: true);
                 // Add the file to project or folder
                 AddFileToContainer(fullPath, folderPath, container);
-            });
 
-            NuGetProjectContext.Log(MessageLevel.Debug, Strings.Debug_AddedFileToProject, path, ProjectName);
+                NuGetProjectContext.Log(MessageLevel.Debug, Strings.Debug_AddedFileToProject, path, ProjectName);
+            });
         }
 
         protected virtual void AddFileToContainer(string fullPath, string folderPath, EnvDTEProjectItems container)
@@ -243,7 +245,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         public virtual void AddReference(string referencePath)
         {
-            if(referencePath == null)
+            if (referencePath == null)
             {
                 throw new ArgumentNullException("referencePath");
             }
@@ -306,8 +308,8 @@ namespace NuGet.PackageManagement.VisualStudio
 
                             // Try to find the item for the assembly name
                             MicrosoftBuildEvaluationProjectItem item = (from assemblyReferenceNode in buildProject.GetAssemblyReferences()
-                                                       where AssemblyNamesMatch(assemblyName, assemblyReferenceNode.Item2)
-                                                       select assemblyReferenceNode.Item1).FirstOrDefault();
+                                                                        where AssemblyNamesMatch(assemblyName, assemblyReferenceNode.Item2)
+                                                                        select assemblyReferenceNode.Item1).FirstOrDefault();
 
                             if (item != null)
                             {
@@ -621,11 +623,15 @@ namespace NuGet.PackageManagement.VisualStudio
 
         public void AddBindingRedirects()
         {
-            InitForBindingRedirects();
-            if(IsBindingRedirectSupported && VSSolutionManager != null)
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
-                RuntimeHelpers.AddBindingRedirects(VSSolutionManager, EnvDTEProject, VSFrameworkMultiTargeting, NuGetProjectContext);
-            }
+                InitForBindingRedirects();
+                if (IsBindingRedirectSupported && VSSolutionManager != null)
+                {
+
+                    await RuntimeHelpers.AddBindingRedirectsAsync(VSSolutionManager, EnvDTEProject, VSFrameworkMultiTargeting, NuGetProjectContext);
+                }
+            });
         }
 
         private bool BindingRedirectsRelatedInitialized = false;
@@ -634,7 +640,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         private void InitForBindingRedirects()
         {
-            if(!BindingRedirectsRelatedInitialized)
+            if (!BindingRedirectsRelatedInitialized)
             {
                 var solutionManager = ServiceLocator.GetInstanceSafe<ISolutionManager>();
                 VSSolutionManager = (solutionManager != null) ? (solutionManager as VSSolutionManager) : null;

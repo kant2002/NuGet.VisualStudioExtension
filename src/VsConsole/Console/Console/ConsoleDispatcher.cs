@@ -2,14 +2,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
-using NuGet;
-using System.Globalization;
-using NuGet.PackageManagement;
 using NuGet.PackageManagement.VisualStudio;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGetConsole.Implementation.Console
 {
@@ -109,35 +109,39 @@ namespace NuGetConsole.Implementation.Console
 
         public VsKeyInfo WaitKey()
         {
-            try
+            return ThreadHelper.JoinableTaskFactory.Run<VsKeyInfo>(async delegate
             {
-                // raise the StartWaitingKey event on main thread
-                RaiseEventSafe(StartWaitingKey);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                try
+                {
+                    // raise the StartWaitingKey event on main thread
+                    RaiseEventSafe(StartWaitingKey);
 
-                // set/reset the cancellation token
-                _cancelWaitKeySource = new CancellationTokenSource();
-                _isExecutingReadKey = true;
+                    // set/reset the cancellation token
+                    _cancelWaitKeySource = new CancellationTokenSource();
+                    _isExecutingReadKey = true;
 
-                // blocking call
-                VsKeyInfo key = _keyBuffer.Take(_cancelWaitKeySource.Token);
+                    // blocking call
+                    VsKeyInfo key = _keyBuffer.Take(_cancelWaitKeySource.Token);
 
-                return key;
-            }
-            catch (OperationCanceledException)
-            {
-                return null;
-            }
-            finally
-            {
-                _isExecutingReadKey = false;
-            }
+                    return key;
+                }
+                catch (OperationCanceledException)
+                {
+                    return null;
+                }
+                finally
+                {
+                    _isExecutingReadKey = false;
+                }
+            });
         }
 
         private void RaiseEventSafe(EventHandler handler)
         {
             if (handler != null)
             {
-                Microsoft.VisualStudio.Shell.ThreadHelper.Generic.Invoke(() => handler(this, EventArgs.Empty));
+                handler(this, EventArgs.Empty);
             }
         }
 
@@ -186,19 +190,24 @@ namespace NuGetConsole.Implementation.Console
                     ).ContinueWith(
                         task =>
                         {
-                            if (task.IsFaulted)
+                            ThreadHelper.JoinableTaskFactory.Run(async delegate
                             {
-                                var exception = ExceptionHelper.Unwrap(task.Exception);
-                                WriteError(exception.Message);
-                            }
+                                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                                if (task.IsFaulted)
+                                {
+                                    var exception = ExceptionHelper.Unwrap(task.Exception);
+                                    WriteError(exception.Message);
+                                }
 
-                            if (host.IsCommandEnabled && _dispatcher != null)
-                            {
-                                Microsoft.VisualStudio.Shell.ThreadHelper.Generic.Invoke(_dispatcher.Start);
-                            }
+                                if (host.IsCommandEnabled && _dispatcher != null)
+                                {
 
-                            RaiseEventSafe(StartCompleted);
-                            IsStartCompleted = true;
+                                    _dispatcher.Start();
+                                }
+
+                                RaiseEventSafe(StartCompleted);
+                                IsStartCompleted = true;
+                            });
                         },
                         TaskContinuationOptions.NotOnCanceled
                     );

@@ -12,12 +12,14 @@ using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Tasks;
 using EnvDTEProject = EnvDTE.Project;
+using Task = System.Threading.Tasks.Task;
+using TaskIEnumerableAssemblyBinding = System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<NuGet.PackageManagement.VisualStudio.AssemblyBinding>>;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
     public static class RuntimeHelpers
     {
-        public static void AddBindingRedirects(
+        public static async Task AddBindingRedirectsAsync(
             VSSolutionManager vsSolutionManager,
             EnvDTEProject envDTEProject,
             IVsFrameworkMultiTargeting frameworkMultiTargeting,
@@ -32,8 +34,8 @@ namespace NuGet.PackageManagement.VisualStudio
                 if (EnvDTEProjectUtility.SupportsBindingRedirects(envDTEProject))
                 {
                     // Get the dependentEnvDTEProjectsDictionary once here, so that, it is not called for every single project
-                    var dependentEnvDTEProjectsDictionary = vsSolutionManager.GetDependentEnvDTEProjectsDictionary();
-                    AddBindingRedirects(vsSolutionManager, envDTEProject, domain,
+                    var dependentEnvDTEProjectsDictionary = await vsSolutionManager.GetDependentEnvDTEProjectsDictionary();
+                    await AddBindingRedirectsAsync(vsSolutionManager, envDTEProject, domain,
                         frameworkMultiTargeting, dependentEnvDTEProjectsDictionary, nuGetProjectContext);
                 }
             }
@@ -43,7 +45,7 @@ namespace NuGet.PackageManagement.VisualStudio
             }
         }
 
-        private static void AddBindingRedirects(
+        private static async Task AddBindingRedirectsAsync(
             VSSolutionManager vsSolutionManager,
             EnvDTEProject envDTEProject,
             AppDomain domain,
@@ -53,11 +55,11 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             var visitedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var projectAssembliesCache = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-            AddBindingRedirects(vsSolutionManager, envDTEProject, domain, visitedProjects, projectAssembliesCache,
+            await AddBindingRedirectsAsync(vsSolutionManager, envDTEProject, domain, visitedProjects, projectAssembliesCache,
                 frameworkMultiTargeting, dependentEnvDTEProjectsDictionary, nuGetProjectContext);
         }
 
-        private static void AddBindingRedirects(VSSolutionManager vsSolutionManager,
+        private static async Task AddBindingRedirectsAsync(VSSolutionManager vsSolutionManager,
             EnvDTEProject envDTEProject,
             AppDomain domain,
             HashSet<string> visitedProjects,
@@ -74,13 +76,13 @@ namespace NuGet.PackageManagement.VisualStudio
 
             if (EnvDTEProjectUtility.SupportsBindingRedirects(envDTEProject))
             {
-                AddBindingRedirects(vsSolutionManager, envDTEProject, domain, projectAssembliesCache, frameworkMultiTargeting, nuGetProjectContext);
+                await AddBindingRedirectsAsync(vsSolutionManager, envDTEProject, domain, projectAssembliesCache, frameworkMultiTargeting, nuGetProjectContext);
             }
 
             // Add binding redirects to all envdteprojects that are referencing this one
             foreach (EnvDTEProject dependentEnvDTEProject in VSSolutionManager.GetDependentEnvDTEProjects(dependentEnvDTEProjectsDictionary, envDTEProject))
             {
-                AddBindingRedirects(
+                await AddBindingRedirectsAsync(
                     vsSolutionManager,
                     dependentEnvDTEProject,
                     domain,
@@ -94,7 +96,7 @@ namespace NuGet.PackageManagement.VisualStudio
             visitedProjects.Add(envDTEProjectUniqueName);
         }
 
-        public static IEnumerable<AssemblyBinding> AddBindingRedirects(
+        public static async TaskIEnumerableAssemblyBinding AddBindingRedirectsAsync(
             ISolutionManager solutionManager,
             EnvDTEProject envDTEProject,
             AppDomain domain,
@@ -102,6 +104,9 @@ namespace NuGet.PackageManagement.VisualStudio
             IVsFrameworkMultiTargeting frameworkMultiTargeting,
             INuGetProjectContext nuGetProjectContext)
         {
+            // Run this on the UI thread since it enumerates all references
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             var redirects = Enumerable.Empty<AssemblyBinding>();
             var msBuildNuGetProjectSystem = GetMSBuildNuGetProjectSystem(solutionManager, envDTEProject);
 
@@ -114,9 +119,7 @@ namespace NuGet.PackageManagement.VisualStudio
             // Get the full path from envDTEProject
             var root = EnvDTEProjectUtility.GetFullPath(envDTEProject);
 
-            // Run this on the UI thread since it enumerates all references
-            IEnumerable<string> assemblies = ThreadHelper.Generic.Invoke(() => EnvDTEProjectUtility.GetAssemblyClosure(envDTEProject, projectAssembliesCache));
-
+            IEnumerable<string> assemblies = EnvDTEProjectUtility.GetAssemblyClosure(envDTEProject, projectAssembliesCache);
             redirects = BindingRedirectResolver.GetBindingRedirects(assemblies, domain);
 
             if (frameworkMultiTargeting != null)
@@ -138,10 +141,10 @@ namespace NuGet.PackageManagement.VisualStudio
         private static IMSBuildNuGetProjectSystem GetMSBuildNuGetProjectSystem(ISolutionManager solutionManager, EnvDTEProject envDTEProject)
         {
             var nuGetProject = solutionManager.GetNuGetProject(envDTEProject.Name);
-            if(nuGetProject != null)
+            if (nuGetProject != null)
             {
                 var msBuildNuGetProject = nuGetProject as MSBuildNuGetProject;
-                if(msBuildNuGetProject != null)
+                if (msBuildNuGetProject != null)
                 {
                     return msBuildNuGetProject.MSBuildNuGetProjectSystem;
                 }

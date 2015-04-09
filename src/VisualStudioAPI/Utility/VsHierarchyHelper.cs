@@ -8,6 +8,8 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.PackageManagement;
 using NuGet.PackageManagement.VisualStudio;
+using Task = System.Threading.Tasks.Task;
+using TaskExpandedNodes = System.Threading.Tasks.Task<System.Collections.Generic.IDictionary<string, System.Collections.Generic.ISet<NuGet.VisualStudio.VsHierarchyItem>>>;
 
 namespace NuGet.VisualStudio
 {
@@ -16,46 +18,43 @@ namespace NuGet.VisualStudio
         private const string VsWindowKindSolutionExplorer = "3AE79031-E1BC-11D0-8F78-00A0C9110057";
         private const string WixProjectTypeGuid = "930C7802-8A8C-48F9-8165-68863BCCD9DD";
 
-        public static IDictionary<string, ISet<VsHierarchyItem>> GetAllExpandedNodes(ISolutionManager solutionManager)
+        public static async TaskExpandedNodes GetAllExpandedNodesAsync(ISolutionManager solutionManager)
         {
+            // this operation needs to execute on UI thread
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             var dte = ServiceLocator.GetInstance<DTE>();
             var projects = dte.Solution.Projects;
 
-            // this operation needs to execute on UI thread
-            return ThreadHelper.Generic.Invoke(() =>
+            var results = new Dictionary<string, ISet<VsHierarchyItem>>(StringComparer.OrdinalIgnoreCase);
+            foreach (Project project in projects)
             {
-                var results = new Dictionary<string, ISet<VsHierarchyItem>>(StringComparer.OrdinalIgnoreCase);
-                foreach (Project project in projects)
-                {
-                    ICollection<VsHierarchyItem> expandedNodes =
-                        GetExpandedProjectHierarchyItems(project);
-                    Debug.Assert(!results.ContainsKey(GetUniqueName(project)));
-                    results[GetUniqueName(project)] =
-                        new HashSet<VsHierarchyItem>(expandedNodes);
-                }
-                return results;
+                ICollection<VsHierarchyItem> expandedNodes =
+                    GetExpandedProjectHierarchyItems(project);
+                Debug.Assert(!results.ContainsKey(GetUniqueName(project)));
+                results[GetUniqueName(project)] =
+                    new HashSet<VsHierarchyItem>(expandedNodes);
             }
-            );
+            return results;
         }
 
-        public static void CollapseAllNodes(ISolutionManager solutionManager, IDictionary<string, ISet<VsHierarchyItem>> ignoreNodes)
+        public static async Task CollapseAllNodesAsync(ISolutionManager solutionManager, IDictionary<string, ISet<VsHierarchyItem>> ignoreNodes)
         {
+            // this operation needs to execute on UI thread
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             var dte = ServiceLocator.GetInstance<DTE>();
             var projects = dte.Solution.Projects;
 
-            // this operation needs to execute on UI thread
-            ThreadHelper.Generic.Invoke(() =>
+            foreach (Project project in projects)
             {
-                foreach (Project project in projects)
+                ISet<VsHierarchyItem> expandedNodes;
+                if (ignoreNodes.TryGetValue(GetUniqueName(project), out expandedNodes) &&
+                    expandedNodes != null)
                 {
-                    ISet<VsHierarchyItem> expandedNodes;
-                    if (ignoreNodes.TryGetValue(GetUniqueName(project), out expandedNodes) &&
-                        expandedNodes != null)
-                    {
-                        CollapseProjectHierarchyItems(project, expandedNodes);
-                    }
+                    CollapseProjectHierarchyItems(project, expandedNodes);
                 }
-            });
+            }
         }
 
         private static ICollection<VsHierarchyItem> GetExpandedProjectHierarchyItems(EnvDTE.Project project)

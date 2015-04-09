@@ -5,6 +5,11 @@ $topDownloadedPackageIds = (
     'jQuery', # content files, PS scripts (install.ps1 and uninstall.ps1)
     'EntityFramework', # Web.config transforms, PS scripts (init.ps1 and install.ps1)
     'Microsoft.AspNet.Mvc', # Deep dependency graph
+    'Microsoft.Net.Http', # Framework references, PCL Target framework folders
+    'WindowsAzure.Storage', # Reference elements in nuspec. And, deep dependency graph
+    'Antlr', # No target framework specific folders
+    'Microsoft.Bcl.Build', # .Targets files
+    'angularjs'<#,
     'Microsoft.AspNet.WebPages',
     'Microsoft.AspNet.Razor',
     'Microsoft.AspNet.WebApi.Client',
@@ -12,7 +17,6 @@ $topDownloadedPackageIds = (
     'Microsoft.AspNet.WebApi.WebHost',
     'Microsoft.AspNet.WebApi',
     'Microsoft.AspNet.Web.Optimization',
-    'Microsoft.Net.Http', # Framework references, PCL Target framework folders
     'WebGrease',
     'jQuery.Validation',
     'jQuery.UI.Combined',
@@ -22,17 +26,14 @@ $topDownloadedPackageIds = (
     'System.Spatial',
     'Microsoft.Web.Infrastructure',
     'Modernizr',
-    'Microsoft.Bcl.Build', # .Targets files
     'Microsoft.Bcl',
     'Moq',
-    'Antlr', # No target framework specific folders
     'Microsoft.Owin',
     'bootstrap',
     'Microsoft.jQuery.Unobtrusive.Ajax',
     'Microsoft.Owin.Host.SystemWeb',
     'Microsoft.Owin.Security',
     'NuGet.CommandLine',
-    'WindowsAzure.Storage', # Reference elements in nuspec. And, deep dependency graph
     'NUnit',
     'Microsoft.AspNet.WebApi.OData',
     'log4net',
@@ -51,9 +52,8 @@ $topDownloadedPackageIds = (
     'Microsoft.AspNet.Identity.Owin',
     'Microsoft.AspNet.Mvc.FixedDisplayModes',
     'Microsoft.AspNet.WebPages.Data',
-    'angularjs',
     'nlog',
-    'microsoft.aspnet.signalr'
+    'microsoft.aspnet.signalr'#>
     )
 
 $projectSystemNames = (

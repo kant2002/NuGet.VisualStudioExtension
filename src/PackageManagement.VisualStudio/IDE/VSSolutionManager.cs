@@ -14,6 +14,7 @@ using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Configuration;
 using NuGet.ProjectManagement;
 using EnvDTEProject = EnvDTE.Project;
+using TaskDependentEnvDTEProjects = System.Threading.Tasks.Task<System.Collections.Generic.IDictionary<string, System.Collections.Generic.List<EnvDTE.Project>>>;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -484,29 +485,28 @@ namespace NuGet.PackageManagement.VisualStudio
             return Enumerable.Empty<EnvDTEProject>();
         }
 
-        internal IDictionary<string, List<EnvDTEProject>> GetDependentEnvDTEProjectsDictionary()
+        internal async TaskDependentEnvDTEProjects GetDependentEnvDTEProjectsDictionary()
         {
-            Init();
-
-            var dependentEnvDTEProjectsDictionary = new Dictionary<string, List<Project>>();
-
             // Get all of the projects in the solution and build the reverse graph. i.e.
             // if A has a project reference to B (A -> B) the this will return B -> A
             // We need to run this on the ui thread so that it doesn't freeze for websites. Since there might be a 
             // large number of references.
-            ThreadHelper.Generic.Invoke(() =>
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            Init();
+
+            var dependentEnvDTEProjectsDictionary = new Dictionary<string, List<Project>>();
+
+            foreach (EnvDTEProject envDTEProj in GetEnvDTEProjects())
             {
-                foreach (EnvDTEProject envDTEProj in GetEnvDTEProjects())
+                if (EnvDTEProjectUtility.SupportsReferences(envDTEProj))
                 {
-                    if (EnvDTEProjectUtility.SupportsReferences(envDTEProj))
+                    foreach (var referencedProject in EnvDTEProjectUtility.GetReferencedProjects(envDTEProj))
                     {
-                        foreach (var referencedProject in EnvDTEProjectUtility.GetReferencedProjects(envDTEProj))
-                        {
-                            AddDependentProject(dependentEnvDTEProjectsDictionary, referencedProject, envDTEProj);
-                        }
+                        AddDependentProject(dependentEnvDTEProjectsDictionary, referencedProject, envDTEProj);
                     }
                 }
-            });
+            }
 
             return dependentEnvDTEProjectsDictionary;
         }

@@ -1,4 +1,4 @@
-﻿using Microsoft.Build.Evaluation;
+using Microsoft.Build.Evaluation;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,6 +25,10 @@ using System.Runtime.CompilerServices;
 using Microsoft.VisualStudio.Project.Designers;
 using Microsoft.VisualStudio.Project;
 using System.Text.RegularExpressions;
+using Task = System.Threading.Tasks.Task;
+using TaskBool = System.Threading.Tasks.Task<bool>;
+using TaskEnvDTEProjectItem = System.Threading.Tasks.Task<EnvDTE.ProjectItem>;
+using TaskEnvDTEProjectItems = System.Threading.Tasks.Task<EnvDTE.ProjectItems>;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -541,6 +545,15 @@ namespace NuGet.PackageManagement.VisualStudio
         // Get the ProjectItems for a folder path
         public static EnvDTEProjectItems GetProjectItems(EnvDTEProject envDTEProject, string folderPath, bool createIfNotExists = false)
         {
+            return ThreadHelper.JoinableTaskFactory.Run<EnvDTEProjectItems>(async delegate
+            {
+                return await GetProjectItemsAsync(envDTEProject, folderPath, createIfNotExists);
+            });
+        }
+
+        // Get the ProjectItems for a folder path
+        private static async TaskEnvDTEProjectItems GetProjectItemsAsync(EnvDTEProject envDTEProject, string folderPath, bool createIfNotExists)
+        {
             if (String.IsNullOrEmpty(folderPath))
             {
                 return envDTEProject.ProjectItems;
@@ -561,7 +574,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 fullPath = Path.Combine(fullPath, part);
                 folderRelativePath = Path.Combine(folderRelativePath, part);
 
-                cursor = GetOrCreateFolder(envDTEProject, cursor, fullPath, folderRelativePath, part, createIfNotExists);
+                cursor = await GetOrCreateFolderAsync(envDTEProject, cursor, fullPath, folderRelativePath, part, createIfNotExists);
                 if (cursor == null)
                 {
                     return null;
@@ -572,7 +585,7 @@ namespace NuGet.PackageManagement.VisualStudio
         }
 
         // 'parentItem' can be either a Project or ProjectItem
-        private static EnvDTEProjectItem GetOrCreateFolder(
+        private static async TaskEnvDTEProjectItem GetOrCreateFolderAsync(
             EnvDTEProject envDTEProject,
             object parentItem,
             string fullPath,
@@ -600,7 +613,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 // it into our project.
                 if (IsJavaScriptProject(envDTEProject) && Directory.Exists(fullPath))
                 {
-                    bool succeeded = IncludeExistingFolderToProject(envDTEProject, folderRelativePath);
+                    bool succeeded = await IncludeExistingFolderToProjectAsync(envDTEProject, folderRelativePath);
                     if (succeeded)
                     {
                         // IMPORTANT: after including the folder into project, we need to get 
@@ -638,8 +651,10 @@ namespace NuGet.PackageManagement.VisualStudio
             return envDTEProjectItem != null;
         }
 
-        private static bool IncludeExistingFolderToProject(EnvDTEProject envDTEProject, string folderRelativePath)
+        private static async TaskBool IncludeExistingFolderToProjectAsync(EnvDTEProject envDTEProject, string folderRelativePath)
         {
+            // Execute command to include the existing folder into project. Must do this on UI thread.
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             IVsUIHierarchy projectHierarchy = (IVsUIHierarchy)VsHierarchyUtility.ToVsHierarchy(envDTEProject);
 
             uint itemId;
@@ -649,15 +664,13 @@ namespace NuGet.PackageManagement.VisualStudio
                 return false;
             }
 
-            // Execute command to include the existing folder into project. Must do this on UI thread.
-            hr = ThreadHelper.Generic.Invoke(() =>
-                    projectHierarchy.ExecCommand(
-                        itemId,
-                        ref VsMenus.guidStandardCommandSet2K,
-                        (int)VSConstants.VSStd2KCmdID.INCLUDEINPROJECT,
-                        0,
-                        IntPtr.Zero,
-                        IntPtr.Zero));
+            hr = projectHierarchy.ExecCommand(
+                            itemId,
+                            ref VsMenus.guidStandardCommandSet2K,
+                            (int)VSConstants.VSStd2KCmdID.INCLUDEINPROJECT,
+                            0,
+                            IntPtr.Zero,
+                            IntPtr.Zero);
 
             return ErrorHandler.Succeeded(hr);
         }
@@ -1030,9 +1043,22 @@ namespace NuGet.PackageManagement.VisualStudio
         /// </summary>
         public static bool IsSharedProject(EnvDTEProject envDTEProject)
         {
+            bool isShared = false;
             var hier = VsHierarchyUtility.ToVsHierarchy(envDTEProject);
 
-            return hier.IsCapabilityMatch("SharedAssetsProject");
+            // VSHPROPID_ProjectCapabilities is a space delimited list of capabilities (Dev11+)
+            object capObj;
+            if (ErrorHandler.Succeeded(hier.GetProperty((uint)VSConstants.VSITEMID.Root, (int)__VSHPROPID5.VSHPROPID_ProjectCapabilities, out capObj)) && capObj != null)
+            {
+                string cap = capObj as string;
+
+                if (!String.IsNullOrEmpty(cap))
+                {
+                    isShared = cap.Split(' ').Any(s => StringComparer.OrdinalIgnoreCase.Equals("SharedAssetsProject", s));
+                }
+            }
+
+            return isShared;
         }
 
         public static bool SupportsINuGetProjectSystem(EnvDTEProject envDTEProject)
@@ -1090,8 +1116,10 @@ namespace NuGet.PackageManagement.VisualStudio
 
         // This method should only be called in VS 2012
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void DoWorkInWriterLock(EnvDTEProject project, Action<MicrosoftBuildEvaluationProject> action)
+        public static async Task DoWorkInWriterLockAsync(EnvDTEProject project, Action<MicrosoftBuildEvaluationProject> action)
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             IVsBrowseObjectContext context = project.Object as IVsBrowseObjectContext;
             if (context == null)
             {
@@ -1105,16 +1133,14 @@ namespace NuGet.PackageManagement.VisualStudio
                 if (service != null)
                 {
                     // This has to run on Main thread, otherwise it will dead-lock (for C++ projects at least)
-                    ThreadHelper.Generic.Invoke(() =>
-                        service.Write(
-                            context.UnconfiguredProject.FullPath,
-                            dwa =>
-                            {
-                                MicrosoftBuildEvaluationProject buildProject = dwa.GetProject(context.UnconfiguredProject.Services.SuggestedConfiguredProject);
-                                action(buildProject);
-                            },
-                            ProjectAccess.Read | ProjectAccess.Write)
-                    );
+                    service.Write(
+                        context.UnconfiguredProject.FullPath,
+                        dwa =>
+                        {
+                            MicrosoftBuildEvaluationProject buildProject = dwa.GetProject(context.UnconfiguredProject.Services.SuggestedConfiguredProject);
+                            action(buildProject);
+                        },
+                        ProjectAccess.Read | ProjectAccess.Write);
                 }
             }
         }

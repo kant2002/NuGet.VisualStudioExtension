@@ -18,6 +18,7 @@ using NuGet.ProjectManagement;
 using NuGet.Protocol.Core.Types;
 using NuGet.VisualStudio.Resources;
 using LegacyNuGet = Legacy.NuGet;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.VisualStudio
 {
@@ -137,7 +138,7 @@ namespace NuGet.VisualStudio
         /// <param name="repositorySettings">The repository settings for the packages being installed.</param>
         /// <param name="warningHandler">An action that accepts a warning message and presents it to the user, allowing execution to continue.</param>
         /// <param name="errorHandler">An action that accepts an error message and presents it to the user, allowing execution to continue.</param>
-        internal void PerformPackageInstall(
+        internal async Task PerformPackageInstallAsync(
             IVsPackageInstaller packageInstaller,
             Project project,
             PreinstalledPackageConfiguration configuration,
@@ -155,7 +156,7 @@ namespace NuGet.VisualStudio
             repos.AddFromRepository(repository);
 
             // store expanded node state
-            IDictionary<string, ISet<VsHierarchyItem>> expandedNodes = VsHierarchyHelper.GetAllExpandedNodes(_solutionManager);
+            IDictionary<string, ISet<VsHierarchyItem>> expandedNodes = await VsHierarchyHelper.GetAllExpandedNodesAsync(_solutionManager);
 
             foreach (var package in configuration.Packages)
             {
@@ -191,7 +192,7 @@ namespace NuGet.VisualStudio
                         projectContext.PackageExtractionContext.UseLegacyPackageInstallPath = true;
 
                         // This runs from the UI thread
-                        PackageManagementHelpers.RunSync(async () => await _installer.InstallInternal(project, toInstall, repos, projectContext, package.IgnoreDependencies, CancellationToken.None));
+                        await _installer.InstallInternalAsync(project, toInstall, repos, projectContext, package.IgnoreDependencies, CancellationToken.None);
                     }
                     catch (InvalidOperationException exception)
                     {
@@ -235,7 +236,7 @@ namespace NuGet.VisualStudio
             }
 
             // collapse nodes
-            VsHierarchyHelper.CollapseAllNodes(_solutionManager, expandedNodes);
+            await VsHierarchyHelper.CollapseAllNodesAsync(_solutionManager, expandedNodes);
         }
 
         /// <summary>

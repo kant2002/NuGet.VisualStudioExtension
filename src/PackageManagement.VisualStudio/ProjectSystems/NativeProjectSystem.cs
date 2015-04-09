@@ -11,7 +11,7 @@ using EnvDTEProject = EnvDTE.Project;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
-    public class NativeProjectSystem: CpsProjectSystem
+    public class NativeProjectSystem : CpsProjectSystem
     {
         public NativeProjectSystem(EnvDTEProject envDTEProject, INuGetProjectContext nuGetProjectContext)
             : base(envDTEProject, nuGetProjectContext)
@@ -30,13 +30,14 @@ namespace NuGet.PackageManagement.VisualStudio
                 return;
             }
 
-            // Get the project items for the folder path
-            string folderPath = Path.GetDirectoryName(path);
-            string fullPath = FileSystemUtility.GetFullPath(EnvDTEProjectUtility.GetFullPath(EnvDTEProject),path);;
-
-            ThreadHelper.Generic.Invoke(() =>
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
-                VCProjectHelper.AddFileToProject(EnvDTEProject.Object, fullPath, folderPath);   
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                // Get the project items for the folder path
+                string folderPath = Path.GetDirectoryName(path);
+                string fullPath = FileSystemUtility.GetFullPath(EnvDTEProjectUtility.GetFullPath(EnvDTEProject), path); ;
+
+                VCProjectHelper.AddFileToProject(EnvDTEProject.Object, fullPath, folderPath);
             });
 
             NuGetProjectContext.Log(MessageLevel.Debug, Strings.Debug_AddedFileToProject, path, ProjectName);

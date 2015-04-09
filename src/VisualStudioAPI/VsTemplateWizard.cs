@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 using EnvDTE;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TemplateWizard;
 using NuGet.Configuration;
 using NuGet.PackageManagement;
@@ -13,6 +14,7 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
 using NuGet.VisualStudio.Resources;
 using NuGetConsole;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.VisualStudio
 {
@@ -208,23 +210,23 @@ namespace NuGet.VisualStudio
             return XmlUtility.LoadSafe(path);
         }
 
-        private void ProjectFinishedGenerating(Project project)
+        private async Task ProjectFinishedGeneratingAsync(Project project)
         {
-            TemplateFinishedGenerating(project);
+            await TemplateFinishedGeneratingAsync(project);
         }
 
-        private void ProjectItemFinishedGenerating(ProjectItem projectItem)
+        private async Task ProjectItemFinishedGeneratingAsync(ProjectItem projectItem)
         {
-            TemplateFinishedGenerating(projectItem.ContainingProject);
+            await TemplateFinishedGeneratingAsync(projectItem.ContainingProject);
         }
 
-        private void TemplateFinishedGenerating(Project project)
+        private async Task TemplateFinishedGeneratingAsync(Project project)
         {
             foreach (var configuration in _configurations)
             {
                 if (configuration.Packages.Any())
                 {
-                    _preinstalledPackageInstaller.PerformPackageInstall(_installer, project, configuration, ShowWarningMessage, ShowErrorMessage);
+                    await _preinstalledPackageInstaller.PerformPackageInstallAsync(_installer, project, configuration, ShowWarningMessage, ShowErrorMessage);
                 }
             }
         }
@@ -332,12 +334,18 @@ namespace NuGet.VisualStudio
 
         void IWizard.ProjectFinishedGenerating(Project project)
         {
-            ProjectFinishedGenerating(project);
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                await ProjectFinishedGeneratingAsync(project);
+            });
         }
 
         void IWizard.ProjectItemFinishedGenerating(ProjectItem projectItem)
         {
-            ProjectItemFinishedGenerating(projectItem);
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                await ProjectItemFinishedGeneratingAsync(projectItem);
+            });
         }
 
         void IWizard.RunFinished()
