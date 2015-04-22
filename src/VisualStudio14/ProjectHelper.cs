@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Threading.Tasks;
 #if VS14
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.ProjectSystem;
 using Microsoft.VisualStudio.ProjectSystem.Designers;
+using Microsoft.VisualStudio.Shell;
 #endif
 using Microsoft.VisualStudio.Shell.Interop;
 using MsBuildProject = Microsoft.Build.Evaluation.Project;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.VisualStudio14
 {
@@ -15,13 +16,10 @@ namespace NuGet.VisualStudio14
 #if VS14
         public static async Task DoWorkInWriterLockAsync(EnvDTE.Project project, IVsHierarchy hierarchy, Action<MsBuildProject> action)
         {
-            await DoWorkInWriterLockAsync((IVsProject)hierarchy, action);
-            project.Save();
-        }
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-        private static async Task DoWorkInWriterLockAsync(IVsProject project, Action<MsBuildProject> action)
-        {
-            UnconfiguredProject unconfiguredProject = GetUnconfiguredProject(project);
+            var vsProject = (IVsProject)hierarchy;
+            UnconfiguredProject unconfiguredProject = GetUnconfiguredProject(vsProject);
             if (unconfiguredProject != null)
             {
                 var service = unconfiguredProject.ProjectService.Services.ProjectLockService;
@@ -42,6 +40,7 @@ namespace NuGet.VisualStudio14
                     }
 
                     await unconfiguredProject.ProjectService.Services.ThreadingPolicy.SwitchToUIThread();
+                    project.Save();
                 }
             }
         }

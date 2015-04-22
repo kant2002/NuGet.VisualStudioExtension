@@ -480,7 +480,9 @@ namespace NuGetVSExtension
         }
 
         private void ShowDocWindow(Project project, string searchText)
-        {   
+        {
+            // Should be on the UI thread
+
             var windowFrame = FindExistingWindowFrame(project);
             if (windowFrame == null)
             {
@@ -506,6 +508,8 @@ namespace NuGetVSExtension
 
         private IVsWindowFrame CreateNewWindowFrame(Project project)
         {
+            // Should be on the UI thread
+
             var vsProject = VsHierarchyUtility.ToVsHierarchy(project);
             var documentName = project.UniqueName;
 
@@ -604,6 +608,8 @@ namespace NuGetVSExtension
 
         private void ShowManageLibraryPackageDialog(object sender, EventArgs e)
         {
+            // Should be on the UI thread
+
             string parameterString = null;
             OleMenuCmdEventArgs args = e as OleMenuCmdEventArgs;
             if (null != args)

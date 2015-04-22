@@ -1,22 +1,20 @@
 ﻿extern alias Legacy;
-using EnvDTE;
-using NuGet.Configuration;
-using NuGet.PackageManagement;
-using NuGet.Versioning;
-using NuGet.VisualStudio.Resources;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using NuGet.Protocol.Core.Types;
-using LegacyNuGet = Legacy.NuGet;
-using NuGet.ProjectManagement;
-using NuGet.Packaging;
-using System.Diagnostics;
-using NuGet.PackageManagement.VisualStudio;
+using EnvDTE;
 using Microsoft.VisualStudio.Shell;
+using NuGet.Configuration;
+using NuGet.PackageManagement;
+using NuGet.Packaging;
+using NuGet.Protocol.Core.Types;
+using NuGet.Versioning;
+using NuGet.VisualStudio.Resources;
+using LegacyNuGet = Legacy.NuGet;
+using TaskIEnumerablePackageReference = System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<NuGet.Packaging.PackageReference>>;
 
 namespace NuGet.VisualStudio
 {
@@ -71,30 +69,25 @@ namespace NuGet.VisualStudio
             });
         }
 
-        private IEnumerable<PackageReference> GetInstalledPackageReferences(Project project)
+        private async TaskIEnumerablePackageReference GetInstalledPackageReferencesAsync(Project project)
         {
             if (project == null)
             {
                 throw new ArgumentNullException("project");
             }
 
-            return ThreadHelper.JoinableTaskFactory.Run(async delegate
+            List<PackageReference> packages = new List<PackageReference>();
+
+            if (_solutionManager != null && !String.IsNullOrEmpty(_solutionManager.SolutionDirectory))
             {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                InitializePackageManagerAndPackageFolderPath();
 
-                List<PackageReference> packages = new List<PackageReference>();
+                var nuGetProject = PackageManagementHelpers.GetProject(_solutionManager, project, new VSAPIProjectContext());
+                var installedPackages = await nuGetProject.GetInstalledPackagesAsync(CancellationToken.None);
+                packages.AddRange(installedPackages);
+            }
 
-                if (_solutionManager != null && !String.IsNullOrEmpty(_solutionManager.SolutionDirectory))
-                {
-                    InitializePackageManagerAndPackageFolderPath();
-
-                    var nuGetProject = PackageManagementHelpers.GetProject(_solutionManager, project, new VSAPIProjectContext());
-                    var installedPackages = await nuGetProject.GetInstalledPackagesAsync(CancellationToken.None);
-                    packages.AddRange(installedPackages);
-                }
-
-                return packages;
-            });
+            return packages;
         }
 
         public IEnumerable<IVsPackageMetadata> GetInstalledPackages(Project project)
@@ -182,20 +175,26 @@ namespace NuGet.VisualStudio
                 throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "packageId");
             }
 
-            var packages = GetInstalledPackageReferences(project).Where(p => StringComparer.OrdinalIgnoreCase.Equals(p.PackageIdentity.Id, packageId));
-
-            if (version != null)
+            return ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
-                NuGetVersion semVer = null;
-                if (!NuGetVersion.TryParse(version.ToString(), out semVer))
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                var installedPackageReferences = await GetInstalledPackageReferencesAsync(project);
+                var packages = installedPackageReferences.Where(p => StringComparer.OrdinalIgnoreCase.Equals(p.PackageIdentity.Id, packageId));
+
+                if (version != null)
                 {
-                    throw new ArgumentException(VsResources.InvalidSemanticVersionString, "version");
+                    NuGetVersion semVer = null;
+                    if (!NuGetVersion.TryParse(version.ToString(), out semVer))
+                    {
+                        throw new ArgumentException(VsResources.InvalidSemanticVersionString, "version");
+                    }
+
+                    packages = packages.Where(p => VersionComparer.VersionRelease.Equals(p.PackageIdentity.Version, semVer));
                 }
 
-                packages = packages.Where(p => VersionComparer.VersionRelease.Equals(p.PackageIdentity.Version, semVer));
-            }
-
-            return packages.Any();
+                return packages.Any();
+            });
         }
     }
 }

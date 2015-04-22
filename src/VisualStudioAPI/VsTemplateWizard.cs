@@ -222,6 +222,8 @@ namespace NuGet.VisualStudio
 
         private async Task TemplateFinishedGeneratingAsync(Project project)
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             foreach (var configuration in _configurations)
             {
                 if (configuration.Packages.Any())
@@ -233,6 +235,8 @@ namespace NuGet.VisualStudio
 
         private void RunStarted(object automationObject, Dictionary<string, string> replacementsDictionary, WizardRunKind runKind, object[] customParams)
         {
+            // Should be on the UI thread
+
             if (runKind != WizardRunKind.AsNewProject && runKind != WizardRunKind.AsNewItem)
             {
                 ShowErrorMessage(VsResources.TemplateWizard_InvalidWizardRunKind);
@@ -336,6 +340,8 @@ namespace NuGet.VisualStudio
         {
             ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
                 await ProjectFinishedGeneratingAsync(project);
             });
         }
@@ -344,6 +350,8 @@ namespace NuGet.VisualStudio
         {
             ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
                 await ProjectItemFinishedGeneratingAsync(projectItem);
             });
         }
@@ -354,8 +362,13 @@ namespace NuGet.VisualStudio
 
         void IWizard.RunStarted(object automationObject, Dictionary<string, string> replacementsDictionary, WizardRunKind runKind, object[] customParams)
         {
-            // alternatively could get body of WizardData element from replacementsDictionary["$wizarddata$"] instead of parsing vstemplate file.
-            RunStarted(automationObject, replacementsDictionary, runKind, customParams);
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                // alternatively could get body of WizardData element from replacementsDictionary["$wizarddata$"] instead of parsing vstemplate file.
+                RunStarted(automationObject, replacementsDictionary, runKind, customParams);
+            });
         }
 
         bool IWizard.ShouldAddProjectItem(string filePath)

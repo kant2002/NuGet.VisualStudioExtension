@@ -59,6 +59,8 @@ namespace NuGet.VisualStudio
 
         private static ICollection<VsHierarchyItem> GetExpandedProjectHierarchyItems(EnvDTE.Project project)
         {
+            // Should be on the UI thread
+
             VsHierarchyItem projectHierarchyItem = GetHierarchyItemForProject(project);
             IVsUIHierarchyWindow solutionExplorerWindow = GetSolutionExplorerHierarchyWindow();
 
@@ -93,6 +95,8 @@ namespace NuGet.VisualStudio
 
         private static void CollapseProjectHierarchyItems(Project project, ISet<VsHierarchyItem> ignoredHierarcyItems)
         {
+            // Should be on the UI thread
+
             VsHierarchyItem projectHierarchyItem = GetHierarchyItemForProject(project);
             IVsUIHierarchyWindow solutionExplorerWindow = GetSolutionExplorerHierarchyWindow();
 
@@ -123,6 +127,8 @@ namespace NuGet.VisualStudio
 
         private static VsHierarchyItem GetHierarchyItemForProject(EnvDTE.Project project)
         {
+            // Should be on the UI thread
+
             IVsHierarchy hierarchy;
 
             // Get the solution
@@ -138,6 +144,8 @@ namespace NuGet.VisualStudio
 
         private static void CollapseVsHierarchyItem(VsHierarchyItem vsHierarchyItem, IVsUIHierarchyWindow vsHierarchyWindow)
         {
+            // Should be on the UI thread
+
             if (vsHierarchyItem == null || vsHierarchyWindow == null)
             {
                 return;
@@ -148,6 +156,8 @@ namespace NuGet.VisualStudio
 
         private static bool IsVsHierarchyItemExpanded(VsHierarchyItem hierarchyItem, IVsUIHierarchyWindow uiWindow)
         {
+            // Should be on the UI thread
+
             if (!hierarchyItem.IsExpandable())
             {
                 return false;
@@ -162,6 +172,8 @@ namespace NuGet.VisualStudio
 
         private static IVsUIHierarchyWindow GetSolutionExplorerHierarchyWindow()
         {
+            // Should be on the UI thread
+
             return VsShellUtilities.GetUIHierarchyWindow(
                 ServiceLocator.GetInstance<IServiceProvider>(),
                 new Guid(VsWindowKindSolutionExplorer));
@@ -169,6 +181,8 @@ namespace NuGet.VisualStudio
 
         private static string GetUniqueName(Project project)
         {
+            // Should be on the UI thread
+
             if (IsWixProject(project))
             {
                 // Wix project doesn't offer UniqueName property
@@ -185,8 +199,10 @@ namespace NuGet.VisualStudio
             }
         }
 
-        public static bool IsWixProject(Project project)
+        private static bool IsWixProject(Project project)
         {
+            // Should be on the UI thread
+
             return project.Kind != null && project.Kind.Equals(WixProjectTypeGuid, StringComparison.OrdinalIgnoreCase);
         }
     }

@@ -1,6 +1,3 @@
-using EnvDTE;
-using NuGet.PackageManagement.VisualStudio;
-using NuGet.Resolver;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -12,12 +9,17 @@ using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.PackageManagement;
-using NuGet.Protocol.Core.Types;
+using EnvDTE;
+using Microsoft.VisualStudio.Shell;
 using NuGet.Configuration;
-using NuGet.ProjectManagement;
-using NuGet.Packaging.Core;
+using NuGet.PackageManagement;
+using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging;
+using NuGet.Packaging.Core;
+using NuGet.ProjectManagement;
+using NuGet.Protocol.Core.Types;
+using NuGet.Resolver;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGetConsole.Host.PowerShell.Implementation
 {
@@ -580,15 +582,22 @@ namespace NuGetConsole.Host.PowerShell.Implementation
         {
             Debug.Assert(_solutionManager != null);
 
-            var allProjects = _solutionManager.GetNuGetProjects();
-            _projectSafeNames = allProjects.Select(_solutionManager.GetNuGetProjectSafeName).ToArray();
-            var displayNames = GetDisplayNames(allProjects).ToArray();
-            Array.Sort(displayNames, _projectSafeNames, StringComparer.CurrentCultureIgnoreCase);
-            return _projectSafeNames;
+            return ThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                var allProjects = _solutionManager.GetNuGetProjects();
+                _projectSafeNames = allProjects.Select(_solutionManager.GetNuGetProjectSafeName).ToArray();
+                var displayNames = GetDisplayNames(allProjects).ToArray();
+                Array.Sort(displayNames, _projectSafeNames, StringComparer.CurrentCultureIgnoreCase);
+                return _projectSafeNames;
+            });
         }
 
         private IEnumerable<string> GetDisplayNames(IEnumerable<NuGetProject> allProjects)
         {
+            // Should be on the UI thread
+
             List<string> projectNames = new List<string>();
             VSSolutionManager solutionManager = (VSSolutionManager)_solutionManager;
             foreach (NuGetProject nuGetProject in allProjects)
@@ -599,18 +608,22 @@ namespace NuGetConsole.Host.PowerShell.Implementation
             return projectNames;
         }
 
-        public string GetDisplayName(NuGetProject nuGetProject)
+        private string GetDisplayName(NuGetProject nuGetProject)
         {
+            // Should be on the UI thread
+
             VSSolutionManager solutionManager = (VSSolutionManager)_solutionManager;
             return GetDisplayName(nuGetProject, solutionManager);
-        }      
+        }
 
-        public string GetDisplayName(NuGetProject nuGetProject, VSSolutionManager solutionManager)
+        private string GetDisplayName(NuGetProject nuGetProject, VSSolutionManager solutionManager)
         {
+            // Should be on the UI thread
+
             string safeName = solutionManager.GetNuGetProjectSafeName(nuGetProject);
             Project project = solutionManager.GetDTEProject(safeName);
             return EnvDTEProjectUtility.GetDisplayName(project);
-        }       
+        }
 
         #region ITabExpansion
         public string[] GetExpansions(string line, string lastWord)

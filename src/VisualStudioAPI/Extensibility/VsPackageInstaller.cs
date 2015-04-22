@@ -2,23 +2,21 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
-using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE;
+using Microsoft.VisualStudio.Shell;
 using NuGet.Configuration;
 using NuGet.PackageManagement;
-using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
 using NuGet.Versioning;
-using LegacyNuGet = Legacy.NuGet;
 using NuGet.VisualStudio.Resources;
-using System.Globalization;
-using Microsoft.VisualStudio.Shell;
+using LegacyNuGet = Legacy.NuGet;
 using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.VisualStudio
@@ -87,7 +85,10 @@ namespace NuGet.VisualStudio
                 semVer = new NuGetVersion(version);
             }
 
-            InstallPackage(source, project, packageId, semVer, ignoreDependencies);
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                await InstallPackageAsync(source, project, packageId, semVer, ignoreDependencies);
+            });
         }
 
         public void InstallPackage(string source, Project project, string packageId, string version, bool ignoreDependencies)
@@ -99,10 +100,13 @@ namespace NuGet.VisualStudio
                 NuGetVersion.TryParse(version, out semVer);
             }
 
-            InstallPackage(source, project, packageId, semVer, ignoreDependencies);
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                await InstallPackageAsync(source, project, packageId, semVer, ignoreDependencies);
+            });
         }
 
-        private void InstallPackage(string source, Project project, string packageId, NuGetVersion version, bool ignoreDependencies)
+        private async Task InstallPackageAsync(string source, Project project, string packageId, NuGetVersion version, bool ignoreDependencies)
         {
             IEnumerable<string> sources = null;
 
@@ -123,10 +127,7 @@ namespace NuGet.VisualStudio
 
             VSAPIProjectContext projectContext = new VSAPIProjectContext();
 
-            ThreadHelper.JoinableTaskFactory.Run(async delegate
-            {
-                await InstallInternalAsync(project, toInstall, GetSources(sources), projectContext, ignoreDependencies, CancellationToken.None);
-            });
+            await InstallInternalAsync(project, toInstall, GetSources(sources), projectContext, ignoreDependencies, CancellationToken.None);
         }
 
         public void InstallPackage(LegacyNuGet.IPackageRepository repository, Project project, string packageId, string version, bool ignoreDependencies, bool skipAssemblyReferences)
@@ -326,8 +327,8 @@ namespace NuGet.VisualStudio
             {
                 NuGetVersion highestVersion = null;
 
-                if (dep.VersionRange != null 
-                    && VersionComparer.Default.Equals(dep.VersionRange.MinVersion, dep.VersionRange.MaxVersion) 
+                if (dep.VersionRange != null
+                    && VersionComparer.Default.Equals(dep.VersionRange.MinVersion, dep.VersionRange.MaxVersion)
                     && dep.VersionRange.MinVersion != null)
                 {
                     // this is a single version, not a range
@@ -372,6 +373,7 @@ namespace NuGet.VisualStudio
         internal async Task InstallInternalAsync(Project project, List<PackageIdentity> packages, ISourceRepositoryProvider repoProvider, VSAPIProjectContext projectContext, bool ignoreDependencies, CancellationToken token)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             // store expanded node state
             IDictionary<string, ISet<VsHierarchyItem>> expandedNodes = await VsHierarchyHelper.GetAllExpandedNodesAsync(_solutionManager);
 

@@ -3,6 +3,7 @@ using NuGet.Configuration;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using Microsoft.VisualStudio.Shell;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -23,12 +24,15 @@ namespace NuGet.PackageManagement.VisualStudio
             _settings = new Lazy<IEnumerable<Settings>>(
                 () =>
                 {
-
-                    return NuGet.Configuration.Settings.LoadMachineWideSettings(
-                        baseDirectory,
-                        "VisualStudio",
-                        dte.Version,
-                        VSVersionHelper.GetSKU());
+                    return ThreadHelper.JoinableTaskFactory.Run(async delegate
+                    {
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        return NuGet.Configuration.Settings.LoadMachineWideSettings(
+                          baseDirectory,
+                          "VisualStudio",
+                          dte.Version,
+                          VSVersionHelper.GetSKU());
+                    });
                 });
         }
 

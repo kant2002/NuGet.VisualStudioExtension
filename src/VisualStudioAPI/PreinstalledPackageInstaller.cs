@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using EnvDTE;
+using Microsoft.VisualStudio.Shell;
 using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.PackageManagement;
@@ -145,6 +146,8 @@ namespace NuGet.VisualStudio
             Action<string> warningHandler,
             Action<string> errorHandler)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             string repositoryPath = configuration.RepositoryPath;
             var failedPackageErrors = new List<string>();
 
@@ -255,7 +258,7 @@ namespace NuGet.VisualStudio
         /// Adds refresh files to the specified project for all assemblies references belonging to the packages specified by packageNames.
         /// </summary>
         /// <param name="project">The project.</param>
-        /// <param name="packagesFileSystem">The file system pointing to 'packages' folder under the solution.</param>
+        /// <param name="repositoryPath">The file system pointing to 'packages' folder under the solution.</param>
         /// <param name="packageNames">The package names.</param>
         private void AddRefreshFilesForReferences(Project project, string repositoryPath, IEnumerable<PackageIdentity> packageNames)
         {
@@ -276,8 +279,6 @@ namespace NuGet.VisualStudio
 
             VSAPIProjectContext context = new VSAPIProjectContext();
             WebSiteProjectSystem projectSystem = new WebSiteProjectSystem(project, context);
-
-            var root = EnvDTEProjectUtility.GetFullPath(project);
 
             foreach (var packageName in packageNames)
             {

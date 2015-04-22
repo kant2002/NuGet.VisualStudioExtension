@@ -1,12 +1,11 @@
-﻿using EnvDTE;
-using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using EnvDTE;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 
 namespace NuGet.PackageManagement.PowerShellCmdlets
 {
@@ -44,10 +43,10 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                                                                             InstallShieldLimitedEditionTypeGuid
                                                                         };
 
-        private static readonly HashSet<string> _supportedProjectTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) 
+        private static readonly HashSet<string> _supportedProjectTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            WebSiteProjectTypeGuid, 
-            CsharpProjectTypeGuid, 
+            WebSiteProjectTypeGuid,
+            CsharpProjectTypeGuid,
             VbProjectTypeGuid,
             CppProjectTypeGuid,
             JsProjectTypeGuid,

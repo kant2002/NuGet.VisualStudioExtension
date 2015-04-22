@@ -7,17 +7,21 @@ using EnvDTESolution = EnvDTE.Solution;
 using EnvDTEProject = EnvDTE.Project;
 using EnvDTEProjectItem = EnvDTE.ProjectItem;
 using EnvDTEProjectItems = EnvDTE.ProjectItems;
+using TaskIEnumerableEnvDTEProject = System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<EnvDTE.Project>>;
+using Microsoft.VisualStudio.Shell;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
-    public static class EnvDTESolutionUtility
+    internal static class EnvDTESolutionUtility
     {
         /// <summary>
         /// Get the list of all supported projects in the current solution. This method
         /// recursively iterates through all projects.
         /// </summary>
-        public static IEnumerable<EnvDTEProject> GetAllEnvDTEProjects(EnvDTESolution envDTESolution)
+        internal static IEnumerable<EnvDTEProject> GetAllEnvDTEProjects(EnvDTESolution envDTESolution)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             if (envDTESolution == null || !envDTESolution.IsOpen)
             {
                 yield break;

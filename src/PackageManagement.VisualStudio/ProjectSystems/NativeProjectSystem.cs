@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using EnvDTEProject = EnvDTE.Project;
-
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -23,22 +23,19 @@ namespace NuGet.PackageManagement.VisualStudio
             // We disable assembly reference for native projects
         }
 
-        protected override void AddFileToProject(string path)
+        protected override async Task AddFileToProjectAsync(string path)
         {
             if (ExcludeFile(path))
             {
                 return;
             }
 
-            ThreadHelper.JoinableTaskFactory.Run(async delegate
-            {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                // Get the project items for the folder path
-                string folderPath = Path.GetDirectoryName(path);
-                string fullPath = FileSystemUtility.GetFullPath(EnvDTEProjectUtility.GetFullPath(EnvDTEProject), path); ;
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            // Get the project items for the folder path
+            string folderPath = Path.GetDirectoryName(path);
+            string fullPath = FileSystemUtility.GetFullPath(ProjectFullPath, path); ;
 
-                VCProjectHelper.AddFileToProject(EnvDTEProject.Object, fullPath, folderPath);
-            });
+            VCProjectHelper.AddFileToProject(EnvDTEProject.Object, fullPath, folderPath);
 
             NuGetProjectContext.Log(MessageLevel.Debug, Strings.Debug_AddedFileToProject, path, ProjectName);
         }
@@ -62,8 +59,7 @@ namespace NuGet.PackageManagement.VisualStudio
             }
 
             string folderPath = Path.GetDirectoryName(path);
-            var root = EnvDTEProjectUtility.GetFullPath(EnvDTEProject);
-            string fullPath = FileSystemUtility.GetFullPath(root, path);
+            string fullPath = FileSystemUtility.GetFullPath(ProjectFullPath, path);
 
             bool succeeded;
             succeeded = VCProjectHelper.RemoveFileFromProject(EnvDTEProject.Object, fullPath, folderPath);
@@ -71,7 +67,7 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 // The RemoveFileFromProject() method only removes file from project.
                 // We want to delete it from disk too.
-                FileSystemUtility.DeleteFileAndParentDirectoriesIfEmpty(root, path, NuGetProjectContext);
+                FileSystemUtility.DeleteFileAndParentDirectoriesIfEmpty(ProjectFullPath, path, NuGetProjectContext);
 
                 if (!String.IsNullOrEmpty(folderPath))
                 {

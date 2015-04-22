@@ -10,6 +10,8 @@ namespace NuGet.PackageManagement.VisualStudio
     {
         public EnvDTEProjectName(EnvDTEProject envDTEProject)
         {
+            // Should be on the UI thread
+
             FullName = envDTEProject.FullName;
             UniqueName = EnvDTEProjectUtility.GetUniqueName(envDTEProject);
             ShortName = EnvDTEProjectUtility.GetName(envDTEProject);

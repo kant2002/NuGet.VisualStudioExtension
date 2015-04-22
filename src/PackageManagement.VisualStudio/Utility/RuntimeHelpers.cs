@@ -1,7 +1,4 @@
-﻿using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-using NuGet.ProjectManagement;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -9,8 +6,9 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Runtime.Versioning;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using NuGet.ProjectManagement;
 using EnvDTEProject = EnvDTE.Project;
 using Task = System.Threading.Tasks.Task;
 using TaskIEnumerableAssemblyBinding = System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<NuGet.PackageManagement.VisualStudio.AssemblyBinding>>;
@@ -30,11 +28,13 @@ namespace NuGet.PackageManagement.VisualStudio
 
             try
             {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
                 // Keep track of visited projects
                 if (EnvDTEProjectUtility.SupportsBindingRedirects(envDTEProject))
                 {
-                    // Get the dependentEnvDTEProjectsDictionary once here, so that, it is not called for every single project
-                    var dependentEnvDTEProjectsDictionary = await vsSolutionManager.GetDependentEnvDTEProjectsDictionary();
+                    // Get the dependentEnvDTEProjectsDictionary once here, so that, it is not called for every single project                    
+                    var dependentEnvDTEProjectsDictionary = await vsSolutionManager.GetDependentEnvDTEProjectsDictionaryAsync();
                     await AddBindingRedirectsAsync(vsSolutionManager, envDTEProject, domain,
                         frameworkMultiTargeting, dependentEnvDTEProjectsDictionary, nuGetProjectContext);
                 }
@@ -53,6 +53,8 @@ namespace NuGet.PackageManagement.VisualStudio
             IDictionary<string, List<EnvDTEProject>> dependentEnvDTEProjectsDictionary,
             INuGetProjectContext nuGetProjectContext)
         {
+            // Need to be on the UI thread
+
             var visitedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var projectAssembliesCache = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
             await AddBindingRedirectsAsync(vsSolutionManager, envDTEProject, domain, visitedProjects, projectAssembliesCache,
@@ -68,6 +70,8 @@ namespace NuGet.PackageManagement.VisualStudio
             IDictionary<string, List<EnvDTEProject>> dependentEnvDTEProjectsDictionary,
             INuGetProjectContext nuGetProjectContext)
         {
+            // Need to be on the UI thread
+
             string envDTEProjectUniqueName = EnvDTEProjectUtility.GetUniqueName(envDTEProject);
             if (visitedProjects.Contains(envDTEProjectUniqueName))
             {

@@ -1,19 +1,13 @@
-﻿using NuGet.ProjectManagement;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
-using EnvDTEProject = EnvDTE.Project;
 using Microsoft.VisualStudio.Shell;
+using NuGet.ProjectManagement;
+using EnvDTEProject = EnvDTE.Project;
 using Task = System.Threading.Tasks.Task;
-#if VS10 || VS11 || VS12
-using NuGetVS = NuGet.VisualStudio12;
-#endif
-
 #if VS14
 using NuGetVS = NuGet.VisualStudio14;
+#else
+using NuGetVS = NuGet.VisualStudio12;
 #endif
 
 namespace NuGet.PackageManagement.VisualStudio
@@ -41,38 +35,33 @@ namespace NuGet.PackageManagement.VisualStudio
             ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
                 var root = EnvDTEProjectUtility.GetFullPath(EnvDTEProject);
                 string relativeTargetPath = PathUtility.GetRelativePath(PathUtility.EnsureTrailingSlash(root), targetPath);
-                if (VSVersionHelper.IsVisualStudio2012)
-                {
-                    await EnvDTEProjectUtility.DoWorkInWriterLockAsync(EnvDTEProject, buildProject => MicrosoftBuildEvaluationProjectUtility.AddImportStatement(buildProject, relativeTargetPath, location));
-                    EnvDTEProjectUtility.Save(EnvDTEProject);
-                }
-                else
-                {
-                    await AddImportStatementForVS2013Async(location, relativeTargetPath);
-                }
+                await AddImportStatementForVS2013Async(location, relativeTargetPath);
             });
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private async Task AddImportStatementForVS2013Async(ImportLocation location, string relativeTargetPath)
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             await NuGetVS.ProjectHelper.DoWorkInWriterLockAsync(
                 EnvDTEProject,
                 VsHierarchyUtility.ToVsHierarchy(EnvDTEProject),
                 buildProject => MicrosoftBuildEvaluationProjectUtility.AddImportStatement(buildProject, relativeTargetPath, location));
 
             // notify the project system of the change
-            UpdateImportStamp(EnvDTEProject, true);
+            UpdateImportStamp(EnvDTEProject, isCpsProjectSystem: true);
         }
 
         public override void RemoveImport(string targetPath)
         {
-           if (String.IsNullOrEmpty(targetPath))
-           {
-               throw new ArgumentNullException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "targetPath");
-           }
+            if (String.IsNullOrEmpty(targetPath))
+            {
+                throw new ArgumentNullException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "targetPath");
+            }
 
             ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
@@ -81,16 +70,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 var root = EnvDTEProjectUtility.GetFullPath(EnvDTEProject);
                 // For VS 2012 or above, the operation has to be done inside the Writer lock
                 string relativeTargetPath = PathUtility.GetRelativePath(PathUtility.EnsureTrailingSlash(root), targetPath);
-                if (VSVersionHelper.IsVisualStudio2012)
-                {
-                    await EnvDTEProjectUtility.DoWorkInWriterLockAsync(EnvDTEProject, buildProject => MicrosoftBuildEvaluationProjectUtility.RemoveImportStatement(buildProject, relativeTargetPath));
-                    EnvDTEProjectUtility.Save(EnvDTEProject);
-                }
-                else
-                {
-
-                    await RemoveImportStatementForVS2013Async(relativeTargetPath);
-                }
+                await RemoveImportStatementForVS2013Async(relativeTargetPath);
             });
         }
 
@@ -99,13 +79,15 @@ namespace NuGet.PackageManagement.VisualStudio
         [MethodImpl(MethodImplOptions.NoInlining)]
         private async Task RemoveImportStatementForVS2013Async(string relativeTargetPath)
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             await NuGetVS.ProjectHelper.DoWorkInWriterLockAsync(
                 EnvDTEProject,
                 VsHierarchyUtility.ToVsHierarchy(EnvDTEProject),
                 buildProject => MicrosoftBuildEvaluationProjectUtility.RemoveImportStatement(buildProject, relativeTargetPath));
 
             // notify the project system of the change
-            UpdateImportStamp(EnvDTEProject, true);
+            UpdateImportStamp(EnvDTEProject, isCpsProjectSystem: false);
         }
     }
 }

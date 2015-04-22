@@ -1,9 +1,8 @@
 ﻿using System;
-using System.IO;
 using System.Threading.Tasks;
+using EnvDTE;
 using Microsoft.VisualStudio.Shell.Interop;
 using MsBuildProject = Microsoft.Build.Evaluation.Project;
-using EnvDTE;
 
 #if VS12
 using Microsoft.VisualStudio;
@@ -24,14 +23,6 @@ namespace NuGet.VisualStudio12
         /// run async to avoid deadlocks.
         /// </summary>
         public static async Task DoWorkInWriterLockAsync(Project project, IVsHierarchy hierarchy, Action<MsBuildProject> action)
-        {
-            // Perform this work on a new thread to avoid moving our current thread, and so it can be done async if needed.
-            var task = Task.Run(() => DoWorkInWriterLockInternal(project, hierarchy, action));
-
-            await task;
-        }
-
-        private static async Task DoWorkInWriterLockInternalAsync(Project project, IVsHierarchy hierarchy, Action<MsBuildProject> action)
         {
             UnconfiguredProject unconfiguredProject = GetUnconfiguredProject((IVsProject)hierarchy);
             if (unconfiguredProject != null)
@@ -54,17 +45,10 @@ namespace NuGet.VisualStudio12
                         await x.ReleaseAsync();
                     }
 
-                    // perform the save synchronously
-                    await Task.Run(() =>
-                    {
-                        // move to the UI thread for the rest of this method
-                        unconfiguredProject.ProjectService.Services.ThreadingPolicy.SwitchToUIThread();
+                    // move to the UI thread for the rest of this method
+                    unconfiguredProject.ProjectService.Services.ThreadingPolicy.SwitchToUIThread();
 
-                        //var fileSystem = new PhysicalFileSystem(@"c:\");
-                        //fileSystem.MakeFileWritable(project.FullName);
-                        project.Save();
-                    }
-                    );
+                    project.Save();
                 }
             }
         }

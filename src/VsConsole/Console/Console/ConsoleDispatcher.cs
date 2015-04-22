@@ -112,6 +112,7 @@ namespace NuGetConsole.Implementation.Console
             return ThreadHelper.JoinableTaskFactory.Run<VsKeyInfo>(async delegate
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
                 try
                 {
                     // raise the StartWaitingKey event on main thread
@@ -193,6 +194,7 @@ namespace NuGetConsole.Implementation.Console
                             ThreadHelper.JoinableTaskFactory.Run(async delegate
                             {
                                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
                                 if (task.IsFaulted)
                                 {
                                     var exception = ExceptionHelper.Unwrap(task.Exception);
