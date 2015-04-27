@@ -174,7 +174,7 @@ namespace NuGetConsole.Implementation.Console
 
                     Task.Factory.StartNew(
                         // gives the host a chance to do initialization works before the console starts accepting user inputs
-                        () => 
+                        () =>
                             {
                                 // apply the culture of the main thread to this thread so that the PowerShell engine
                                 // will have the same culture as Visual Studio.

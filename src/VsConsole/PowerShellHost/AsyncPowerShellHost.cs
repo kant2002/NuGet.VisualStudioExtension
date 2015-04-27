@@ -2,6 +2,8 @@
 using System;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
+using System.Threading.Tasks;
+using System.Threading;
 
 namespace NuGetConsole.Host.PowerShell.Implementation
 {
@@ -54,6 +56,18 @@ namespace NuGetConsole.Host.PowerShell.Implementation
             }
 
             return false; // Error occurred, command not executing
+        }
+
+        protected async override Task<string[]> GetExpansionsAsyncCore(string line, string lastWord, CancellationToken token)
+        {
+            var expansions = await GetExpansionsAsyncCore(line, lastWord, isSync: false, token: token);
+            return expansions;
+        }
+
+        protected async override Task<SimpleExpansion> GetPathExpansionsAsyncCore(string line, CancellationToken token)
+        {
+            var simpleExpansion = await GetPathExpansionsAsyncCore(line, isSync: false, token: token);
+            return simpleExpansion;
         }
     }
 }

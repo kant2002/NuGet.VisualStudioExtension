@@ -129,8 +129,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             IEnumerable<string> packageIds = Enumerable.Empty<string>();
             try
             {
-                Task<IEnumerable<string>> task = autoCompleteResource.IdStartsWith(Id, IncludePrerelease.IsPresent, CancellationToken.None);
+                Task<IEnumerable<string>> task = autoCompleteResource.IdStartsWith(Id, IncludePrerelease.IsPresent, Token);
                 packageIds = task.Result;
+                Token.ThrowIfCancellationRequested();
                 if (packageIds != null && packageIds.Any())
                 {
                     packageIds = packageIds.Skip(Skip).Take(First);
@@ -179,7 +180,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             IEnumerable<NuGetVersion> versions = Enumerable.Empty<NuGetVersion>();
             try
             {
-                Task<IEnumerable<NuGetVersion>> versionTask = autoCompleteResource.VersionStartsWith(id, Version, IncludePrerelease.IsPresent, CancellationToken.None);
+                Task<IEnumerable<NuGetVersion>> versionTask = autoCompleteResource.VersionStartsWith(id, Version, IncludePrerelease.IsPresent, Token);
                 versions = versionTask.Result;
             }
             catch (Exception) { }

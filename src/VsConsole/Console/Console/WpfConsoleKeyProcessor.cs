@@ -3,12 +3,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Language.Intellisense;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using NuGet.PackageManagement.VisualStudio;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGetConsole.Implementation.Console
 {
@@ -307,7 +311,10 @@ namespace NuGetConsole.Implementation.Console
                                 }
                                 else
                                 {
-                                    TriggerCompletion();
+                                    ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+                                    {
+                                        await TriggerCompletionAsync();
+                                    });
                                 }
                             }
                             hr = VSConstants.S_OK;
@@ -466,7 +473,7 @@ namespace NuGetConsole.Implementation.Console
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-        void TriggerCompletion()
+        private async Task TriggerCompletionAsync()
         {
             if (CommandExpansion == null)
             {
@@ -483,10 +490,12 @@ namespace NuGetConsole.Implementation.Console
             int caretIndex = CaretPosition - WpfConsole.InputLineStart.Value;
             Debug.Assert(caretIndex >= 0);
 
+            // Cancel tab expansion if it takes more than 3 secs to get any results
+            CancellationTokenSource ctSource = new CancellationTokenSource(3000);
             SimpleExpansion simpleExpansion = null;
             try
             {
-                simpleExpansion = CommandExpansion.GetExpansions(line, caretIndex);
+                simpleExpansion = await CommandExpansion.GetExpansionsAsync(line, caretIndex, ctSource.Token);
             }
             catch (Exception x)
             {
