@@ -495,12 +495,17 @@ namespace NuGetConsole.Implementation.Console
             SimpleExpansion simpleExpansion = null;
             try
             {
+                WpfConsole.Dispatcher.SetExecutingCommand(true);
                 simpleExpansion = await CommandExpansion.GetExpansionsAsync(line, caretIndex, ctSource.Token);
             }
             catch (Exception x)
             {
                 // Ignore exception from expansion, but write it to the activity log
                 ExceptionHelper.WriteToActivityLog(x);
+            }
+            finally
+            {
+                WpfConsole.Dispatcher.SetExecutingCommand(false);
             }
 
             if (simpleExpansion != null && simpleExpansion.Expansions != null)

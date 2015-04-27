@@ -146,9 +146,9 @@ function GetPackages($context) {
 
     if ($context.Id) { $parameters.Id = $context.Id }
     if ($context.Source) { $parameters.source = $context.Source }
-    if (IsPrereleaseSet $context) {
-        $parameters.IncludePreRelease = $true 
-    }
+	# For GetPackages used by TabCompletion for package ids, always set IncludePrerelease to $true
+	# User might add the switch later, so filtering out pre-release too soon may not be better
+    $parameters.IncludePreRelease = $true 
 
     return Find-Package @parameters -StartWith -AllVersions -ExcludeVersionInfo -ErrorAction SilentlyContinue
 }

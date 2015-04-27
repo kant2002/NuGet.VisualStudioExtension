@@ -20,6 +20,7 @@ namespace NuGetConsole.Implementation.Console
         void PostInputLine(InputLine inputLine);
         void PostKey(VsKeyInfo key);
         void CancelWaitKey();
+        void SetExecutingCommand(bool isExecuting);
     }
 
 
@@ -95,6 +96,11 @@ namespace NuGetConsole.Implementation.Console
             {
                 _cancelWaitKeySource.Cancel();
             }
+        }
+
+        public void SetExecutingCommand(bool isExecutingCommand)
+        {
+            _dispatcher.SetExecutingCommand(isExecutingCommand);
         }
 
         public void AcceptKeyInput()
@@ -321,6 +327,11 @@ namespace NuGetConsole.Implementation.Console
                 {
                     WpfConsole.Clear();
                 }
+            }
+
+            public void SetExecutingCommand(bool isExecuting)
+            {
+                IsExecuting = isExecuting;
             }
 
             public abstract void Start();

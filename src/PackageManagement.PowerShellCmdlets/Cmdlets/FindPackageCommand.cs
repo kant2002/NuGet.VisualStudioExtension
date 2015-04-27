@@ -132,7 +132,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             PSAutoCompleteResource autoCompleteResource = ActiveSourceRepository.GetResource<PSAutoCompleteResource>();
             IEnumerable<string> packageIds;
 
-            Task<IEnumerable<string>> task = autoCompleteResource.IdStartsWith(Id, IncludePrerelease.IsPresent, Token);
+            Task<IEnumerable<string>> task = autoCompleteResource.IdStartsWithAsync(Id, IncludePrerelease.IsPresent, Token);
 
             packageIds = task.Result ?? Enumerable.Empty<string>();
 
@@ -197,7 +197,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             IEnumerable<NuGetVersion> versions = Enumerable.Empty<NuGetVersion>();
             try
             {
-                Task<IEnumerable<NuGetVersion>> versionTask = autoCompleteResource.VersionStartsWith(id, Version, IncludePrerelease.IsPresent, Token);
+                Task<IEnumerable<NuGetVersion>> versionTask = autoCompleteResource.VersionStartsWithAsync(id, Version, IncludePrerelease.IsPresent, Token);
                 versions = versionTask.Result;
             }
             catch (Exception) { }
