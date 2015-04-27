@@ -150,7 +150,7 @@ function GetPackages($context) {
         $parameters.IncludePreRelease = $true 
     }
 
-    return Find-Package @parameters -StartWith -AllVersions -ErrorAction SilentlyContinue
+    return Find-Package @parameters -StartWith -AllVersions -ExcludeVersionInfo -ErrorAction SilentlyContinue
 }
 
 function GetProjectNames {

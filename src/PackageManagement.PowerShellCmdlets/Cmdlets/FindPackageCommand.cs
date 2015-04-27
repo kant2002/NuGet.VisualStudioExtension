@@ -41,6 +41,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         public SwitchParameter IncludePrerelease { get; set; }
 
         [Parameter]
+        public SwitchParameter ExcludeVersionInfo { get; set; }
+
+        [Parameter]
         public SwitchParameter AllVersions { get; set; }
 
         /// <summary>
@@ -58,8 +61,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         public SwitchParameter StartWith { get; set; }
 
         [Parameter]
+        [Alias("First")]
         [ValidateRange(0, Int32.MaxValue)]
-        public virtual int First { get; set; }
+        public virtual int Top { get; set; }
 
         [Parameter]
         [ValidateRange(0, Int32.MaxValue)]
@@ -69,9 +73,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         {
             // Since this is used for intellisense, we need to limit the number of packages that we return. Otherwise,
             // typing InstallPackage TAB would download the entire feed.
-            if (First == 0)
+            if (Top == 0)
             {
-                First = MaxReturnedPackages;
+                Top = MaxReturnedPackages;
             }
             if (Id == null)
             {
@@ -102,7 +106,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         private void FindPackagesByPSSearchService()
         {
             VersionType versionType;
-            IEnumerable<PSSearchMetadata> remotePackages = GetPackagesFromRemoteSource(Id, Enumerable.Empty<string>(), IncludePrerelease.IsPresent, Skip, First);
+            IEnumerable<PSSearchMetadata> remotePackages = GetPackagesFromRemoteSource(Id, Enumerable.Empty<string>(), IncludePrerelease.IsPresent, Skip, Top);
             if (ExactMatch.IsPresent)
             {
                 remotePackages = remotePackages.Where(p => string.Equals(p.Identity.Id, Id, StringComparison.OrdinalIgnoreCase));
@@ -126,18 +130,31 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         private void FindPackageStartWithId()
         {
             PSAutoCompleteResource autoCompleteResource = ActiveSourceRepository.GetResource<PSAutoCompleteResource>();
-            IEnumerable<string> packageIds = Enumerable.Empty<string>();
-            try
+            IEnumerable<string> packageIds;
+
+            Task<IEnumerable<string>> task = autoCompleteResource.IdStartsWith(Id, IncludePrerelease.IsPresent, Token);
+
+            packageIds = task.Result ?? Enumerable.Empty<string>();
+
+            Token.ThrowIfCancellationRequested();
+
+            packageIds = packageIds.Skip(Skip).Take(Top);
+
+            if (ExcludeVersionInfo.IsPresent)
             {
-                Task<IEnumerable<string>> task = autoCompleteResource.IdStartsWith(Id, IncludePrerelease.IsPresent, Token);
-                packageIds = task.Result;
-                Token.ThrowIfCancellationRequested();
-                if (packageIds != null && packageIds.Any())
+                List<PowerShellPackage> packages = new List<PowerShellPackage>();
+
+                foreach (var id in packageIds)
                 {
-                    packageIds = packageIds.Skip(Skip).Take(First);
+                    packages.Add(new PowerShellPackage()
+                    {
+                        Id = id,
+                    });
                 }
+
+                WriteObject(packages, enumerateCollection: true);
+                return;
             }
-            catch (Exception) { }
 
             if (!ExactMatch.IsPresent)
             {
