@@ -8,6 +8,7 @@ using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Threading;
+using System.Threading.Tasks;
 using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Threading;
@@ -220,77 +221,80 @@ namespace NuGetConsole.Host.PowerShell.Implementation
         /// Doing all necessary initialization works before the console accepts user inputs
         /// </summary>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-        public void Initialize(IConsole console)
+        public async Task InitializeAsync(IConsole console)
         {
-            ThreadHelper.JoinableTaskFactory.Run(async delegate
-            {
-                ActiveConsole = console;
+            // The following initialization need not run on the UI thread entirely
+            // Go off the UI thread to improve responsiveness
+            // Any operation to be performed such as writing lines to the powershell console window
+            // happens by switching to the UI thread
+            await TaskScheduler.Default;
 
-                if (_initialized.HasValue)
+            ActiveConsole = console;
+
+            if (_initialized.HasValue)
+            {
+                if (_initialized.Value && console.ShowDisclaimerHeader)
                 {
-                    if (_initialized.Value && console.ShowDisclaimerHeader)
+                    DisplayDisclaimerAndHelpText();
+                }
+            }
+            else
+            {
+                try
+                {
+                    Tuple<RunspaceDispatcher, NuGetPSHost> result = _runspaceManager.GetRunspace(console, _name);
+                    _runspace = result.Item1;
+                    _nugetHost = result.Item2;
+
+                    _initialized = true;
+
+                    if (console.ShowDisclaimerHeader)
                     {
                         DisplayDisclaimerAndHelpText();
                     }
-                }
-                else
-                {
-                    try
+
+                    UpdateWorkingDirectory();
+                    await ExecuteInitScriptsAsync();
+
+                    // Hook up solution events
+                    _solutionManager.SolutionOpened += (o, e) =>
                     {
-                        Tuple<RunspaceDispatcher, NuGetPSHost> result = _runspaceManager.GetRunspace(console, _name);
-                        _runspace = result.Item1;
-                        _nugetHost = result.Item2;
-
-                        _initialized = true;
-
-                        if (console.ShowDisclaimerHeader)
-                        {
-                            DisplayDisclaimerAndHelpText();
-                        }
-
-                        UpdateWorkingDirectory();
-                        await ExecuteInitScriptsAsync();
-
-                        // Hook up solution events
-                        _solutionManager.SolutionOpened += (o, e) =>
-                        {
                             // Solution opened event is raised on the UI thread
                             // Go off the UI thread before calling likely expensive call of ExecuteInitScriptsAsync
                             // Also, it uses semaphores, do not call it from the UI thread
                             Task.Run(async delegate
-                            {
-                                UpdateWorkingDirectory();
-                                await ExecuteInitScriptsAsync();
-                            });
-                        };
-                        _solutionManager.SolutionClosed += (o, e) => UpdateWorkingDirectory();
-                        _solutionManager.NuGetProjectAdded += (o, e) => UpdateWorkingDirectoryAndAvailableProjects();
-                        _solutionManager.NuGetProjectRenamed += (o, e) => UpdateWorkingDirectoryAndAvailableProjects();
-                        _solutionManager.NuGetProjectRemoved += (o, e) =>
                         {
-                            UpdateWorkingDirectoryAndAvailableProjects();
+                            UpdateWorkingDirectory();
+                            await ExecuteInitScriptsAsync();
+                        });
+                    };
+                    _solutionManager.SolutionClosed += (o, e) => UpdateWorkingDirectory();
+                    _solutionManager.NuGetProjectAdded += (o, e) => UpdateWorkingDirectoryAndAvailableProjects();
+                    _solutionManager.NuGetProjectRenamed += (o, e) => UpdateWorkingDirectoryAndAvailableProjects();
+                    _solutionManager.NuGetProjectRemoved += (o, e) =>
+                    {
+                        UpdateWorkingDirectoryAndAvailableProjects();
                             // When the previous default project has been removed, _solutionManager.DefaultNuGetProjectName becomes null
                             if (_solutionManager.DefaultNuGetProjectName == null)
-                            {
+                        {
                                 // Change default project to the first one in the collection
                                 SetDefaultProjectIndex(0);
-                            }
-                        };
+                        }
+                    };
 
-                        // Set available private data on Host
-                        SetPrivateDataOnHost(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        // catch all exception as we don't want it to crash VS
-                        _initialized = false;
-                        IsCommandEnabled = false;
-                        ReportError(ex);
-
-                        ExceptionHelper.WriteToActivityLog(ex);
-                    }
+                    // Set available private data on Host
+                    SetPrivateDataOnHost(false);
                 }
-            });
+                catch (Exception ex)
+                {
+                    // catch all exception as we don't want it to crash VS
+                    _initialized = false;
+                    IsCommandEnabled = false;
+                    ReportError(ex);
+
+                    ExceptionHelper.WriteToActivityLog(ex);
+                }
+            }
         }
 
         private void UpdateWorkingDirectoryAndAvailableProjects()

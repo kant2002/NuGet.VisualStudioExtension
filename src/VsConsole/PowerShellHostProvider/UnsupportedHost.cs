@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NuGet.PackageManagement;
 
 namespace NuGetConsole.Host.PowerShellProvider
@@ -16,10 +17,11 @@ namespace NuGetConsole.Host.PowerShellProvider
             }
         }
 
-        public void Initialize(IConsole console)
+        public Task InitializeAsync(IConsole console)
         {
             // display the error message at the beginning
             console.Write(Resources.Host_PSNotInstalled, System.Windows.Media.Colors.Red, null);
+            return Task.FromResult(0);
         }
 
         public string Prompt

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NuGet.PackageManagement;
 
 namespace NuGetConsole
@@ -18,7 +19,7 @@ namespace NuGetConsole
         /// Do initialization work before the specified console accepts user inputs.
         /// </summary>
         /// <param name="console">The console requesting the initialization.</param>
-        void Initialize(IConsole console);
+        Task InitializeAsync(IConsole console);
 
         /// <summary>
         /// Sets the default runspace from the console

@@ -5,6 +5,8 @@ using System.IO;
 using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Threading;
 using NuGet.Frameworks;
 using NuGet.PackageManagement;
 using NuGet.PackageManagement.PowerShellCmdlets;
@@ -13,27 +15,20 @@ using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using EnvDTEProject = EnvDTE.Project;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGetConsole
 {
     [Export(typeof(IScriptExecutor))]
     public class VSScriptExecutor : IScriptExecutor
     {
-        private readonly Lazy<IHost> _host;
+        private readonly AsyncLazy<IHost> _host;
         private readonly ISolutionManager _solutionManager = ServiceLocator.GetInstance<ISolutionManager>();
         private bool _skipPSScriptExecution;
 
         public VSScriptExecutor()
         {
-            _host = new Lazy<IHost>(GetHost);
-        }
-
-        private IHost Host
-        {
-            get
-            {
-                return _host.Value;
-            }
+            _host = new AsyncLazy<IHost>(GetHostAsync, ThreadHelper.JoinableTaskFactory);
         }
 
         [Import]
@@ -124,7 +119,8 @@ namespace NuGetConsole
                         // logging to both the Output window and progress window.
                         nuGetProjectContext.Log(MessageLevel.Info, logMessage);
                         IConsole console = OutputConsoleProvider.CreateOutputConsole(requirePowerShellHost: true);
-                        Host.Execute(console, command, inputs);
+                        var host = await _host.GetValueAsync();
+                        host.Execute(console, command, inputs);
                     }
 
                     return true;
@@ -133,17 +129,17 @@ namespace NuGetConsole
             return false;
         }
 
-        private IHost GetHost()
+        private async Task<IHost> GetHostAsync()
         {
             // create the console and instantiate the PS host on demand
             IConsole console = OutputConsoleProvider.CreateOutputConsole(requirePowerShellHost: true);
             IHost host = console.Host;
 
-            // start the console 
-            console.Dispatcher.Start();
+            // start the console in the background thread and make it asynchronous
+            await Task.Run(() => console.Dispatcher.Start());
 
             // gives the host a chance to do initialization works before dispatching commands to it
-            host.Initialize(console);
+            await host.InitializeAsync(console);
 
             // after the host initializes, it may set IsCommandEnabled = false
             if (host.IsCommandEnabled)

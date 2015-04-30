@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Media;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Threading;
 using NuGet.PackageManagement.VisualStudio;
 using Task = System.Threading.Tasks.Task;
 
@@ -44,7 +44,7 @@ namespace NuGetConsole.Implementation.Console
         /// </summary>
         private Dispatcher _dispatcher;
 
-        private readonly object _lockObj = new object();
+        private readonly AsyncSemaphore _dispatcherStartLock = new AsyncSemaphore(1);
 
         public event EventHandler StartCompleted;
 
@@ -152,69 +152,63 @@ namespace NuGetConsole.Implementation.Console
 
         public void Start()
         {
-            // Only Start once
-            lock (_lockObj)
+            ThreadHelper.JoinableTaskFactory.Run(async delegate
             {
-                if (_dispatcher == null)
+                // Only Start once
+                using (await _dispatcherStartLock.EnterAsync())
                 {
-                    IHost host = WpfConsole.Host;
-
-                    if (host == null)
+                    if (_dispatcher == null)
                     {
-                        throw new InvalidOperationException("Can't start Console dispatcher. Host is null.");
-                    }
+                        IHost host = WpfConsole.Host;
 
-                    if (host is IAsyncHost)
-                    {
-                        _dispatcher = new AsyncHostConsoleDispatcher(this);
-                    }
-                    else
-                    {
-                        _dispatcher = new SyncHostConsoleDispatcher(this);
-                    }
-
-                    // capture the cultures to assign to the worker thread below
-                    CultureInfo currentCulture = CultureInfo.CurrentCulture;
-                    CultureInfo currentUICulture = CultureInfo.CurrentUICulture;
-
-                    Task.Factory.StartNew(
-                        // gives the host a chance to do initialization works before the console starts accepting user inputs
-                        () => 
-                            {
-                                // apply the culture of the main thread to this thread so that the PowerShell engine
-                                // will have the same culture as Visual Studio.
-                                System.Threading.Thread.CurrentThread.CurrentCulture = currentCulture;
-                                System.Threading.Thread.CurrentThread.CurrentUICulture = currentUICulture;
-
-                                host.Initialize(WpfConsole);
-                            }
-                    ).ContinueWith(
-                        task =>
+                        if (host == null)
                         {
-                            ThreadHelper.JoinableTaskFactory.Run(async delegate
-                            {
-                                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                            throw new InvalidOperationException("Can't start Console dispatcher. Host is null.");
+                        }
 
-                                if (task.IsFaulted)
+                        if (host is IAsyncHost)
+                        {
+                            _dispatcher = new AsyncHostConsoleDispatcher(this);
+                        }
+                        else
+                        {
+                            _dispatcher = new SyncHostConsoleDispatcher(this);
+                        }
+
+                        // capture the cultures to assign to the worker thread below
+                        CultureInfo currentCulture = CultureInfo.CurrentCulture;
+                        CultureInfo currentUICulture = CultureInfo.CurrentUICulture;
+
+                        try
+                        {
+                            // gives the host a chance to do initialization works before the console starts accepting user inputs
+                            await Task.Run(async delegate
                                 {
-                                    var exception = ExceptionHelper.Unwrap(task.Exception);
-                                    WriteError(exception.Message);
-                                }
+                                    // apply the culture of the main thread to this thread so that the PowerShell engine
+                                    // will have the same culture as Visual Studio.
+                                    System.Threading.Thread.CurrentThread.CurrentCulture = currentCulture;
+                                    System.Threading.Thread.CurrentThread.CurrentUICulture = currentUICulture;
 
-                                if (host.IsCommandEnabled && _dispatcher != null)
-                                {
+                                    await host.InitializeAsync(WpfConsole);
+                                });
+                        }
+                        catch (Exception ex)
+                        {
+                            var exception = ExceptionHelper.Unwrap(ex);
+                            WriteError(exception.Message);
+                        }
 
-                                    _dispatcher.Start();
-                                }
+                        if (host.IsCommandEnabled && _dispatcher != null)
+                        {
 
-                                RaiseEventSafe(StartCompleted);
-                                IsStartCompleted = true;
-                            });
-                        },
-                        TaskContinuationOptions.NotOnCanceled
-                    );
+                            _dispatcher.Start();
+                        }
+
+                        RaiseEventSafe(StartCompleted);
+                        IsStartCompleted = true;
+                    }
                 }
-            }
+            });
         }
 
         private void WriteError(string message)
