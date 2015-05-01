@@ -8,7 +8,8 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization.Formatters.Binary;
-
+using System.Threading;
+using System.Threading.Tasks;
 using EnvDTE;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
@@ -22,6 +23,7 @@ using NuGet.ProjectManagement;
 using NuGetConsole;
 using NuGetConsole.Implementation;
 using Resx = NuGet.PackageManagement.UI.Resources;
+using Task = System.Threading.Tasks.Task;
 
 namespace NuGetVSExtension
 {
@@ -54,7 +56,7 @@ namespace NuGetVSExtension
         NuGetConsole.Implementation.GuidList.GuidPackageManagerConsoleFontAndColorCategoryString,
         "{" + GuidList.guidNuGetPkgString + "}")]
     [Guid(GuidList.guidNuGetPkgString)]
-    public sealed class NuGetPackage : Package, IVsPackageExtensionProvider, IVsPersistSolutionOpts
+    public sealed class NuGetPackage : AsyncPackage, IVsPackageExtensionProvider, IVsPersistSolutionOpts
     {
         // This product version will be updated by the build script to match the daily build version.
         // It is displayed in the Help - About box of Visual Studio
@@ -93,6 +95,7 @@ namespace NuGetVSExtension
         public NuGetPackage()
         {
             ServiceLocator.InitializePackageServiceProvider(this);
+            ServiceLocator.InitializePackageAsyncServiceProvider(new AsyncServiceProvider(this));
             _projectToToolWindowId = new Dictionary<Project, int>();
             StandaloneSwitch.IsRunningStandalone = false;
             _nugetSettings = new NuGetSettings();
@@ -245,9 +248,9 @@ namespace NuGetVSExtension
         /// Initialization of the package; this method is called right after the package is sited, so this is the place
         /// where you can put all the initialization code that rely on services provided by VisualStudio.
         /// </summary>
-        protected override void Initialize()
+        protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
-            base.Initialize();
+            await base.InitializeAsync(cancellationToken, progress);
             Styles.Initialize();
 
             // ***
@@ -255,12 +258,13 @@ namespace NuGetVSExtension
             //    ServiceLocator.GetInstance<IDebugConsoleController>());
 
             // Add our command handlers for menu (commands must exist in the .vsct file)
-            AddMenuCommandHandlers();
+            await AddMenuCommandHandlers();
 
             // IMPORTANT: Do NOT do anything that can lead to a call to ServiceLocator.GetGlobalService().
             // Doing so is illegal and may cause VS to hang.
 
-            _dte = (DTE)GetService(typeof(SDTE));
+            var dte = await GetServiceAsync(typeof(SDTE));
+            _dte = (DTE)dte;
             Debug.Assert(_dte != null);
 
             _dteEvents = _dte.Events.DTEEvents;
@@ -318,10 +322,11 @@ namespace NuGetVSExtension
                 packageSourceProvider);
         }
 
-        private void AddMenuCommandHandlers()
+        private async Task AddMenuCommandHandlers()
         {
-            _mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
-            if (null != _mcs)
+            var service = await GetServiceAsync(typeof(IMenuCommandService));
+            _mcs =  service as OleMenuCommandService;
+            if (_mcs != null)
             {
                 // menu command for opening Package Manager Console
                 CommandID toolwndCommandID = new CommandID(GuidList.guidNuGetConsoleCmdSet, PkgCmdIDList.cmdidPowerConsole);
