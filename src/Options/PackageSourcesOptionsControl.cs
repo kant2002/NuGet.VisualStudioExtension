@@ -220,12 +220,19 @@ namespace NuGet.Options
             var packageSources = PackageSourcesListBox.Items.Cast<PackageSource>().ToList();
             packageSources.AddRange(MachineWidePackageSourcesListBox.Items.Cast<PackageSource>().ToList());
 
-            var existingSources = _packageSourceProvider.LoadPackageSources().ToList();
-            if (SourcesChanged(existingSources, packageSources))
+            try
             {
-                _packageSourceProvider.SavePackageSources(packageSources);
+                var existingSources = _packageSourceProvider.LoadPackageSources().ToList();
+                if (SourcesChanged(existingSources, packageSources))
+                {
+                    _packageSourceProvider.SavePackageSources(packageSources);
+                }
             }
-
+            catch(InvalidOperationException)
+            {
+                MessageHelper.ShowErrorMessage("Can't access NuGet.Config or NuGet.Config is malformed, Please check NuGet.Config", Resources.ErrorDialogBoxTitle);
+                return false;
+            }
             // find the enabled package source 
             return true;
         }

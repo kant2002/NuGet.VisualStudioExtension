@@ -123,6 +123,9 @@
   <data name="BrowseFolderDialogSelectButton" xml:space="preserve">
     <value>Select</value>
   </data>
+  <data name="ErrorDialogBoxTitle" xml:space="preserve">
+    <value>Operation failed</value>
+  </data>
   <data name="ShowInfo_ClearPackageCache" xml:space="preserve">
     <value>All packages have been cleared from the cache.</value>
   </data>
