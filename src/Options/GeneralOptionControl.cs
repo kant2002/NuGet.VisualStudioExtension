@@ -32,11 +32,17 @@ namespace NuGet.Options
         {
             if (!_initialized)
             {
-                var packageRestoreConsent = new PackageRestoreConsent(_settings);
-                packageRestoreConsentCheckBox.Checked = packageRestoreConsent.IsGrantedInSettings;
-                packageRestoreAutomaticCheckBox.Checked = packageRestoreConsent.IsAutomatic;
-                packageRestoreAutomaticCheckBox.Enabled = packageRestoreConsentCheckBox.Checked;
-
+                try
+                {
+                    var packageRestoreConsent = new PackageRestoreConsent(_settings);
+                    packageRestoreConsentCheckBox.Checked = packageRestoreConsent.IsGrantedInSettings;
+                    packageRestoreAutomaticCheckBox.Checked = packageRestoreConsent.IsAutomatic;
+                    packageRestoreAutomaticCheckBox.Enabled = packageRestoreConsentCheckBox.Checked;
+                }
+                catch(Exception e)
+                {
+                    MessageHelper.ShowErrorMessage(e, Resources.ErrorDialogBoxTitle);
+                }
                 checkForUpdate.Checked = _productUpdateSettings.ShouldCheckForUpdate;
             }
 
@@ -47,9 +53,16 @@ namespace NuGet.Options
         {
             _productUpdateSettings.ShouldCheckForUpdate = checkForUpdate.Checked;
 
-            var packageRestoreConsent = new PackageRestoreConsent(_settings);
-            packageRestoreConsent.IsGrantedInSettings = packageRestoreConsentCheckBox.Checked;
-            packageRestoreConsent.IsAutomatic = packageRestoreAutomaticCheckBox.Checked;
+            try
+            {
+                var packageRestoreConsent = new PackageRestoreConsent(_settings);
+                packageRestoreConsent.IsGrantedInSettings = packageRestoreConsentCheckBox.Checked;
+                packageRestoreConsent.IsAutomatic = packageRestoreAutomaticCheckBox.Checked;
+            }
+            catch (Exception e)
+            {
+                MessageHelper.ShowErrorMessage(e, Resources.ErrorDialogBoxTitle);
+            }
         }
 
         internal void OnClosed()

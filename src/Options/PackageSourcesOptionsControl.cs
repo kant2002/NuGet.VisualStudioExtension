@@ -224,12 +224,18 @@ namespace NuGet.Options
             var packageSources = PackageSourcesListBox.Items.Cast<PackageSource>().ToList();
             packageSources.AddRange(MachineWidePackageSourcesListBox.Items.Cast<PackageSource>().ToList());
 
-            var existingSources = _packageSourceProvider.LoadPackageSources().ToList();
-            if (SourcesChanged(existingSources, packageSources))
+            try
             {
-                _packageSourceProvider.SavePackageSources(packageSources);
+                var existingSources = _packageSourceProvider.LoadPackageSources().ToList();
+                if (SourcesChanged(existingSources, packageSources))
+                {
+                    _packageSourceProvider.SavePackageSources(packageSources);
+                }
             }
-
+            catch(Exception e)
+            {
+                MessageHelper.ShowErrorMessage(e, Resources.ErrorDialogBoxTitle);
+            }
             // find the enabled package source 
             var updatedActiveSource = packageSources.Find(p => p.IsEnabled);
             return true;
